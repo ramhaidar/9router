@@ -1090,6 +1090,7 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
   const [formData, setFormData] = useState({
     name: "",
     priority: 1,
+    apiKey: "",
   });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -1099,6 +1100,7 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
       setFormData({
         name: connection.name || "",
         priority: connection.priority || 1,
+        apiKey: "",
       });
       setTestResult(null);
     }
@@ -1126,6 +1128,9 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
 
   const handleSubmit = () => {
     const updates = { name: formData.name, priority: formData.priority };
+    if (!isOAuth && formData.apiKey) {
+      updates.apiKey = formData.apiKey;
+    }
     onSave(updates);
   };
 
@@ -1155,6 +1160,16 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
           value={formData.priority}
           onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value) || 1 })}
         />
+        {!isOAuth && (
+          <Input
+            label="API Key"
+            type="password"
+            value={formData.apiKey}
+            onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+            placeholder="Enter new API key"
+            hint="Leave blank to keep the current API key."
+          />
+        )}
 
         {/* Test Connection */}
         {!isCompatible && (
