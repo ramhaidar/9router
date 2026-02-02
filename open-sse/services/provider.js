@@ -2,8 +2,7 @@ import { PROVIDERS } from "../config/constants.js";
 
 const OPENAI_COMPATIBLE_PREFIX = "openai-compatible-";
 const OPENAI_COMPATIBLE_DEFAULTS = {
-  chat: "https://api.openai.com/v1/chat/completions",
-  responses: "https://api.openai.com/v1/responses",
+  baseUrl: "https://api.openai.com/v1",
 };
 
 function isOpenAICompatible(provider) {
@@ -13,6 +12,12 @@ function isOpenAICompatible(provider) {
 function getOpenAICompatibleType(provider) {
   if (!isOpenAICompatible(provider)) return "chat";
   return provider.includes("responses") ? "responses" : "chat";
+}
+
+function buildOpenAICompatibleUrl(baseUrl, apiType) {
+  const normalized = baseUrl.replace(/\/$/, "");
+  const path = apiType === "responses" ? "/responses" : "/chat/completions";
+  return `${normalized}${path}`;
 }
 
 // Detect request format from body structure
@@ -96,7 +101,7 @@ export function getProviderConfig(provider) {
     return {
       ...PROVIDERS.openai,
       format: apiType === "responses" ? "openai-responses" : "openai",
-      baseUrl: OPENAI_COMPATIBLE_DEFAULTS[apiType],
+      baseUrl: OPENAI_COMPATIBLE_DEFAULTS.baseUrl,
     };
   }
   return PROVIDERS[provider] || PROVIDERS.openai;
@@ -112,7 +117,8 @@ export function getProviderFallbackCount(provider) {
 export function buildProviderUrl(provider, model, stream = true, options = {}) {
   if (isOpenAICompatible(provider)) {
     const apiType = getOpenAICompatibleType(provider);
-    return options?.baseUrl || OPENAI_COMPATIBLE_DEFAULTS[apiType];
+    const baseUrl = options?.baseUrl || OPENAI_COMPATIBLE_DEFAULTS.baseUrl;
+    return buildOpenAICompatibleUrl(baseUrl, apiType);
   }
   const config = getProviderConfig(provider);
 

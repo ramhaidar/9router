@@ -3,8 +3,7 @@ import { createProviderNode, getProviderNodes } from "@/models";
 import { OPENAI_COMPATIBLE_PREFIX } from "@/shared/constants/providers";
 
 const OPENAI_COMPATIBLE_DEFAULTS = {
-  chat: "https://api.openai.com/v1/chat/completions",
-  responses: "https://api.openai.com/v1/responses",
+  baseUrl: "https://api.openai.com/v1",
 };
 
 // GET /api/provider-nodes - List all provider nodes
@@ -32,7 +31,7 @@ export async function POST(request) {
       id: `${OPENAI_COMPATIBLE_PREFIX}${apiType}-${crypto.randomUUID()}`,
       type: "openai-compatible",
       apiType,
-      baseUrl: (baseUrl || OPENAI_COMPATIBLE_DEFAULTS[apiType]).trim(),
+      baseUrl: (baseUrl || OPENAI_COMPATIBLE_DEFAULTS.baseUrl).trim(),
       name: name?.trim() || `OpenAI Compatible (${apiType === "responses" ? "Responses" : "Chat"})`,
     });
 

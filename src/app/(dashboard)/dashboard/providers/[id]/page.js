@@ -233,6 +233,19 @@ export default function ProviderDetailPage() {
   };
 
   const renderModelsSection = () => {
+    if (isOpenAICompatible) {
+      return (
+        <OpenAICompatibleModelsSection
+          providerAlias={providerAlias}
+          modelAliases={modelAliases}
+          copied={copied}
+          onCopy={copy}
+          onSetAlias={handleSetAlias}
+          onDeleteAlias={handleDeleteAlias}
+          connections={connections}
+        />
+      );
+    }
     if (providerInfo.passthroughModels) {
       return (
         <PassthroughModelsSection
@@ -340,7 +353,8 @@ export default function ProviderDetailPage() {
             <div>
               <h2 className="text-lg font-semibold">OpenAI Compatible Details</h2>
               <p className="text-sm text-text-muted">
-                {providerNode.apiType === "responses" ? "Responses API" : "Chat Completions"} · {providerNode.baseUrl}
+                {providerNode.apiType === "responses" ? "Responses API" : "Chat Completions"} · {(providerNode.baseUrl || "").replace(/\/$/, "")}/
+                {providerNode.apiType === "responses" ? "responses" : "chat/completions"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -657,6 +671,140 @@ PassthroughModelRow.propTypes = {
   onDeleteAlias: PropTypes.func.isRequired,
 };
 
+function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, onCopy, onSetAlias, onDeleteAlias, connections }) {
+  const [newModel, setNewModel] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const providerAliases = Object.entries(modelAliases).filter(
+    ([, model]) => model.startsWith(`${providerAlias}/`)
+  );
+
+  const allModels = providerAliases.map(([alias, fullModel]) => ({
+    modelId: fullModel.replace(`${providerAlias}/`, ""),
+    fullModel,
+    alias,
+  }));
+
+  const generateDefaultAlias = (modelId) => {
+    const parts = modelId.split("/");
+    return parts[parts.length - 1];
+  };
+
+  const handleAdd = async () => {
+    if (!newModel.trim() || adding) return;
+    const modelId = newModel.trim();
+    const defaultAlias = generateDefaultAlias(modelId);
+    if (modelAliases[defaultAlias]) {
+      alert(`Alias "${defaultAlias}" already exists. Please use a different model or edit existing alias.`);
+      return;
+    }
+
+    setAdding(true);
+    try {
+      await onSetAlias(modelId, defaultAlias);
+      setNewModel("");
+    } catch (error) {
+      console.log("Error adding model:", error);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (importing) return;
+    const activeConnection = connections.find((conn) => conn.isActive !== false);
+    if (!activeConnection) return;
+
+    setImporting(true);
+    try {
+      const res = await fetch(`/api/providers/${activeConnection.id}/models`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to import models");
+        return;
+      }
+      const models = data.models || [];
+      for (const model of models) {
+        const modelId = model.id || model.name || model.model;
+        if (!modelId) continue;
+        const defaultAlias = generateDefaultAlias(modelId);
+        if (modelAliases[defaultAlias]) continue;
+        await onSetAlias(modelId, defaultAlias);
+      }
+    } catch (error) {
+      console.log("Error importing models:", error);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const canImport = connections.some((conn) => conn.isActive !== false);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-text-muted">
+        Add OpenAI-compatible models manually or import them from the /models endpoint.
+      </p>
+
+      <div className="flex items-end gap-2 flex-wrap">
+        <div className="flex-1 min-w-[240px]">
+          <label htmlFor="new-compatible-model-input" className="text-xs text-text-muted mb-1 block">Model ID</label>
+          <input
+            id="new-compatible-model-input"
+            type="text"
+            value={newModel}
+            onChange={(e) => setNewModel(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            placeholder="gpt-4o"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+          />
+        </div>
+        <Button size="sm" icon="add" onClick={handleAdd} disabled={!newModel.trim() || adding}>
+          {adding ? "Adding..." : "Add"}
+        </Button>
+        <Button size="sm" variant="secondary" icon="download" onClick={handleImport} disabled={!canImport || importing}>
+          {importing ? "Importing..." : "Import from /models"}
+        </Button>
+      </div>
+
+      {!canImport && (
+        <p className="text-xs text-text-muted">
+          Add a connection to enable importing models.
+        </p>
+      )}
+
+      {allModels.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {allModels.map(({ modelId, fullModel, alias }) => (
+            <PassthroughModelRow
+              key={fullModel}
+              modelId={modelId}
+              fullModel={fullModel}
+              copied={copied}
+              onCopy={onCopy}
+              onDeleteAlias={() => onDeleteAlias(alias)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+OpenAICompatibleModelsSection.propTypes = {
+  providerAlias: PropTypes.string.isRequired,
+  modelAliases: PropTypes.object.isRequired,
+  copied: PropTypes.string,
+  onCopy: PropTypes.func.isRequired,
+  onSetAlias: PropTypes.func.isRequired,
+  onDeleteAlias: PropTypes.func.isRequired,
+  connections: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string,
+    isActive: PropTypes.bool,
+  })).isRequired,
+};
+
 function CooldownTimer({ until }) {
   const [remaining, setRemaining] = useState("");
 
@@ -827,7 +975,6 @@ function AddApiKeyModal({ isOpen, provider, providerName, isOpenAICompatible, on
   const [validationResult, setValidationResult] = useState(null);
 
   const handleValidate = async () => {
-    if (isOpenAICompatible) return;
     setValidating(true);
     try {
       const res = await fetch("/api/providers/validate", {
@@ -872,13 +1019,11 @@ function AddApiKeyModal({ isOpen, provider, providerName, isOpenAICompatible, on
             onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
             className="flex-1"
           />
-          {!isOpenAICompatible && (
-            <div className="pt-6">
-              <Button onClick={handleValidate} disabled={!formData.apiKey || validating} variant="secondary">
-                {validating ? "Checking..." : "Check"}
-              </Button>
-            </div>
-          )}
+          <div className="pt-6">
+            <Button onClick={handleValidate} disabled={!formData.apiKey || validating} variant="secondary">
+              {validating ? "Checking..." : "Check"}
+            </Button>
+          </div>
         </div>
         {validationResult && (
           <Badge variant={validationResult === "success" ? "success" : "error"}>
@@ -887,7 +1032,7 @@ function AddApiKeyModal({ isOpen, provider, providerName, isOpenAICompatible, on
         )}
         {isOpenAICompatible && (
           <p className="text-xs text-text-muted">
-            API key validation is not available for OpenAI Compatible nodes.
+            Validation checks {providerName || "OpenAI Compatible"} via /models on your base URL.
           </p>
         )}
         <Input
@@ -1034,7 +1179,7 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
   const [formData, setFormData] = useState({
     name: "",
     apiType: "chat",
-    baseUrl: "https://api.openai.com/v1/chat/completions",
+    baseUrl: "https://api.openai.com/v1",
   });
   const [saving, setSaving] = useState(false);
 
@@ -1043,7 +1188,7 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
       setFormData({
         name: node.name || "",
         apiType: node.apiType || "chat",
-        baseUrl: node.baseUrl || "https://api.openai.com/v1/chat/completions",
+        baseUrl: node.baseUrl || "https://api.openai.com/v1",
       });
     }
   }, [node]);
@@ -1089,8 +1234,8 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
           label="Base URL"
           value={formData.baseUrl}
           onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
-          placeholder="https://api.openai.com/v1/chat/completions"
-          hint="Use the full endpoint URL for your OpenAI-compatible API."
+          placeholder="https://api.openai.com/v1"
+          hint="Use the base URL (ending in /v1) for your OpenAI-compatible API."
         />
         <div className="flex gap-2">
           <Button onClick={handleSubmit} fullWidth disabled={!formData.baseUrl.trim() || saving}>

@@ -19,7 +19,16 @@ export async function POST(request, { params }) {
       if (connection.authType === "apikey") {
         // Test API key
         if (isOpenAICompatibleProvider(connection.provider)) {
-          error = "Provider test not supported";
+          const modelsBase = connection.providerSpecificData?.baseUrl;
+          if (!modelsBase) {
+            error = "Missing base URL";
+          } else {
+            const modelsUrl = `${modelsBase.replace(/\/$/, "")}/models`;
+            const res = await fetch(modelsUrl, {
+              headers: { "Authorization": `Bearer ${connection.apiKey}` },
+            });
+            isValid = res.ok;
+          }
         } else {
           switch (connection.provider) {
             case "openai":

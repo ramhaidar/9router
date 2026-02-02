@@ -21,10 +21,10 @@ export class BaseExecutor {
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     if (this.provider?.startsWith?.("openai-compatible-")) {
-      const fallbackUrl = this.provider.includes("responses")
-        ? "https://api.openai.com/v1/responses"
-        : "https://api.openai.com/v1/chat/completions";
-      return credentials?.providerSpecificData?.baseUrl || fallbackUrl;
+      const baseUrl = credentials?.providerSpecificData?.baseUrl || "https://api.openai.com/v1";
+      const normalized = baseUrl.replace(/\/$/, "");
+      const path = this.provider.includes("responses") ? "/responses" : "/chat/completions";
+      return `${normalized}${path}`;
     }
     const baseUrls = this.getBaseUrls();
     return baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;

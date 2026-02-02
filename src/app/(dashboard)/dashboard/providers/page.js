@@ -297,7 +297,7 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
   const [formData, setFormData] = useState({
     name: "",
     apiType: "chat",
-    baseUrl: "https://api.openai.com/v1/chat/completions",
+    baseUrl: "https://api.openai.com/v1",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -307,9 +307,7 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
   ];
 
   useEffect(() => {
-    const defaultBaseUrl = formData.apiType === "responses"
-      ? "https://api.openai.com/v1/responses"
-      : "https://api.openai.com/v1/chat/completions";
+    const defaultBaseUrl = "https://api.openai.com/v1";
     setFormData((prev) => ({
       ...prev,
       baseUrl: defaultBaseUrl,
@@ -335,7 +333,7 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
         setFormData({
           name: "",
           apiType: "chat",
-          baseUrl: "https://api.openai.com/v1/chat/completions",
+          baseUrl: "https://api.openai.com/v1",
         });
       }
     } catch (error) {
@@ -365,8 +363,8 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
           label="Base URL"
           value={formData.baseUrl}
           onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
-          placeholder="https://api.openai.com/v1/chat/completions"
-          hint="Use the full endpoint URL for your OpenAI-compatible API."
+          placeholder="https://api.openai.com/v1"
+          hint="Use the base URL (ending in /v1) for your OpenAI-compatible API."
         />
         <div className="flex gap-2">
           <Button onClick={handleSubmit} fullWidth disabled={!formData.baseUrl.trim() || submitting}>

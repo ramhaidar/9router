@@ -22,7 +22,12 @@ export async function POST(request) {
         if (!node) {
           return NextResponse.json({ error: "OpenAI Compatible node not found" }, { status: 404 });
         }
-        return NextResponse.json({ error: "Provider validation not supported" }, { status: 400 });
+        const modelsUrl = `${node.baseUrl?.replace(/\/$/, "")}/models`;
+        const res = await fetch(modelsUrl, {
+          headers: { "Authorization": `Bearer ${apiKey}` },
+        });
+        isValid = res.ok;
+        break;
       }
 
       switch (provider) {
@@ -87,8 +92,8 @@ export async function POST(request) {
           break;
         }
 
-        default:
-          return NextResponse.json({ error: "Provider validation not supported" }, { status: 400 });
+          default:
+            return NextResponse.json({ error: "Provider validation not supported" }, { status: 400 });
       }
     } catch (err) {
       error = err.message;
