@@ -86,9 +86,18 @@ export async function getDb() {
       }
     }
 
-    // Initialize with default data if empty
+    // Initialize with default data if empty, and ensure new keys exist
     if (!dbInstance.data) {
       dbInstance.data = defaultData;
+      await dbInstance.write();
+    } else {
+      dbInstance.data.providerConnections ||= [];
+      dbInstance.data.providerNodes ||= [];
+      dbInstance.data.modelAliases ||= {};
+      dbInstance.data.combos ||= [];
+      dbInstance.data.apiKeys ||= [];
+      dbInstance.data.settings ||= { cloudEnabled: false, stickyRoundRobinLimit: 3 };
+      dbInstance.data.pricing ||= {};
       await dbInstance.write();
     }
   }
