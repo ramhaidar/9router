@@ -484,6 +484,9 @@ export async function POST(request, { params }) {
       valid: result.valid,
       error: result.error,
       refreshed: result.refreshed || false,
+      valid: result.valid,
+      error: result.error,
+      refreshed: result.refreshed || false,
     });
   } catch (error) {
     console.log("Error testing connection:", error);
