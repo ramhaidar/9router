@@ -8,6 +8,7 @@ export {
   getProviderNodes,
   getProviderNodeById,
   createProviderNode,
+  updateProviderNode,
   deleteProviderNode,
   deleteProviderConnectionsByProvider,
   getModelAliases,

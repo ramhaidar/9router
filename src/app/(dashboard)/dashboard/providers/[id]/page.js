@@ -20,6 +20,7 @@ export default function ProviderDetailPage() {
   const [showOAuthModal, setShowOAuthModal] = useState(false);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditNodeModal, setShowEditNodeModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [modelAliases, setModelAliases] = useState({});
   const { copied, copy } = useCopyToClipboard();
@@ -74,6 +75,24 @@ export default function ProviderDetailPage() {
       setLoading(false);
     }
   }, [providerId]);
+
+  const handleUpdateNode = async (formData) => {
+    try {
+      const res = await fetch(`/api/provider-nodes/${providerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProviderNode(data.node);
+        await fetchConnections();
+        setShowEditNodeModal(false);
+      }
+    } catch (error) {
+      console.log("Error updating provider node:", error);
+    }
+  };
 
   useEffect(() => {
     fetchConnections();
@@ -327,6 +346,22 @@ export default function ProviderDetailPage() {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
+                icon="add"
+                onClick={() => setShowAddApiKeyModal(true)}
+                disabled={connections.length > 0}
+              >
+                Add
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="edit"
+                onClick={() => setShowEditNodeModal(true)}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
                 variant="secondary"
                 icon="delete"
                 onClick={async () => {
@@ -342,14 +377,6 @@ export default function ProviderDetailPage() {
                 }}
               >
                 Delete
-              </Button>
-              <Button
-                size="sm"
-                icon="add"
-                onClick={() => setShowAddApiKeyModal(true)}
-                disabled={connections.length > 0}
-              >
-                Add
               </Button>
             </div>
           </div>
@@ -453,6 +480,12 @@ export default function ProviderDetailPage() {
         connection={selectedConnection}
         onSave={handleUpdateConnection}
         onClose={() => setShowEditModal(false)}
+      />
+      <EditOpenAICompatibleModal
+        isOpen={showEditNodeModal}
+        node={providerNode}
+        onSave={handleUpdateNode}
+        onClose={() => setShowEditNodeModal(false)}
       />
     </div>
   );
@@ -992,6 +1025,93 @@ EditConnectionModal.propTypes = {
     priority: PropTypes.number,
     authType: PropTypes.string,
     provider: PropTypes.string,
+  }),
+  onSave: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired,
+};
+
+function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
+  const [formData, setFormData] = useState({
+    name: "",
+    apiType: "chat",
+    baseUrl: "https://api.openai.com/v1/chat/completions",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (node) {
+      setFormData({
+        name: node.name || "",
+        apiType: node.apiType || "chat",
+        baseUrl: node.baseUrl || "https://api.openai.com/v1/chat/completions",
+      });
+    }
+  }, [node]);
+
+  const apiTypeOptions = [
+    { value: "chat", label: "Chat Completions" },
+    { value: "responses", label: "Responses API" },
+  ];
+
+  const handleSubmit = async () => {
+    if (!formData.baseUrl.trim()) return;
+    setSaving(true);
+    try {
+      await onSave({
+        name: formData.name,
+        apiType: formData.apiType,
+        baseUrl: formData.baseUrl,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!node) return null;
+
+  return (
+    <Modal isOpen={isOpen} title="Edit OpenAI Compatible" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <Input
+          label="Name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="OpenAI Compatible (Prod)"
+          hint="Optional. A friendly label for this node."
+        />
+        <Select
+          label="API Type"
+          options={apiTypeOptions}
+          value={formData.apiType}
+          onChange={(e) => setFormData({ ...formData, apiType: e.target.value })}
+        />
+        <Input
+          label="Base URL"
+          value={formData.baseUrl}
+          onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+          placeholder="https://api.openai.com/v1/chat/completions"
+          hint="Use the full endpoint URL for your OpenAI-compatible API."
+        />
+        <div className="flex gap-2">
+          <Button onClick={handleSubmit} fullWidth disabled={!formData.baseUrl.trim() || saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+          <Button onClick={onClose} variant="ghost" fullWidth>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+EditOpenAICompatibleModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  node: PropTypes.shape({
+    id: PropTypes.string,
+    name: PropTypes.string,
+    apiType: PropTypes.string,
+    baseUrl: PropTypes.string,
   }),
   onSave: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,

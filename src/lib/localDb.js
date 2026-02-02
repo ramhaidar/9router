@@ -174,6 +174,26 @@ export async function createProviderNode(data) {
 }
 
 /**
+ * Update provider node
+ */
+export async function updateProviderNode(id, data) {
+  const db = await getDb();
+  const index = db.data.providerNodes.findIndex((node) => node.id === id);
+
+  if (index === -1) return null;
+
+  db.data.providerNodes[index] = {
+    ...db.data.providerNodes[index],
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await db.write();
+
+  return db.data.providerNodes[index];
+}
+
+/**
  * Delete provider node
  */
 export async function deleteProviderNode(id) {
