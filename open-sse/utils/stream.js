@@ -13,43 +13,66 @@ function getTimeString() {
 
 // Extract usage from any format (Claude, OpenAI, Gemini, Responses API)
 function extractUsage(chunk) {
+  if (!chunk || typeof chunk !== "object") return null;
+
   // Claude format (message_delta event)
   if (chunk.type === "message_delta" && chunk.usage) {
-    return {
+    return normalizeUsage({
       prompt_tokens: chunk.usage.input_tokens || 0,
       completion_tokens: chunk.usage.output_tokens || 0,
       cache_read_input_tokens: chunk.usage.cache_read_input_tokens,
       cache_creation_input_tokens: chunk.usage.cache_creation_input_tokens
-    };
+    });
   }
   // OpenAI Responses API format (response.completed or response.done)
   if ((chunk.type === "response.completed" || chunk.type === "response.done") && chunk.response?.usage) {
     const usage = chunk.response.usage;
-    return {
+    return normalizeUsage({
       prompt_tokens: usage.input_tokens || usage.prompt_tokens || 0,
       completion_tokens: usage.output_tokens || usage.completion_tokens || 0,
       cached_tokens: usage.input_tokens_details?.cached_tokens,
       reasoning_tokens: usage.output_tokens_details?.reasoning_tokens
-    };
+    });
   }
   // OpenAI format
   if (chunk.usage?.prompt_tokens !== undefined) {
-    return {
+    return normalizeUsage({
       prompt_tokens: chunk.usage.prompt_tokens,
       completion_tokens: chunk.usage.completion_tokens || 0,
       cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens,
       reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens
-    };
+    });
   }
   // Gemini format
   if (chunk.usageMetadata) {
-    return {
+    return normalizeUsage({
       prompt_tokens: chunk.usageMetadata.promptTokenCount || 0,
       completion_tokens: chunk.usageMetadata.candidatesTokenCount || 0,
       reasoning_tokens: chunk.usageMetadata.thoughtsTokenCount
-    };
+    });
   }
   return null;
+}
+
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return null;
+
+  const normalized = {};
+  const assignNumber = (key, value) => {
+    if (value === undefined || value === null) return;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) normalized[key] = numeric;
+  };
+
+  assignNumber("prompt_tokens", usage.prompt_tokens);
+  assignNumber("completion_tokens", usage.completion_tokens);
+  assignNumber("cache_read_input_tokens", usage.cache_read_input_tokens);
+  assignNumber("cache_creation_input_tokens", usage.cache_creation_input_tokens);
+  assignNumber("cached_tokens", usage.cached_tokens);
+  assignNumber("reasoning_tokens", usage.reasoning_tokens);
+
+  if (Object.keys(normalized).length === 0) return null;
+  return normalized;
 }
 
 // ANSI color codes
