@@ -730,12 +730,21 @@ function OpenAICompatibleModelsSection({ providerStorageAlias, providerDisplayAl
         return;
       }
       const models = data.models || [];
+      if (models.length === 0) {
+        alert("No models returned from /models.");
+        return;
+      }
+      let importedCount = 0;
       for (const model of models) {
         const modelId = model.id || model.name || model.model;
         if (!modelId) continue;
         const defaultAlias = generateDefaultAlias(modelId);
         if (modelAliases[defaultAlias]) continue;
         await onSetAlias(modelId, defaultAlias, providerStorageAlias);
+        importedCount += 1;
+      }
+      if (importedCount === 0) {
+        alert("No new models were added.");
       }
     } catch (error) {
       console.log("Error importing models:", error);
