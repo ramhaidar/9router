@@ -21,7 +21,15 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, apiType, baseUrl } = body;
+    const { name, prefix, apiType, baseUrl } = body;
+
+    if (!name?.trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    if (!prefix?.trim()) {
+      return NextResponse.json({ error: "Prefix is required" }, { status: 400 });
+    }
 
     if (!apiType || !["chat", "responses"].includes(apiType)) {
       return NextResponse.json({ error: "Invalid OpenAI compatible API type" }, { status: 400 });
@@ -30,9 +38,10 @@ export async function POST(request) {
     const node = await createProviderNode({
       id: `${OPENAI_COMPATIBLE_PREFIX}${apiType}-${crypto.randomUUID()}`,
       type: "openai-compatible",
+      prefix: prefix.trim(),
       apiType,
       baseUrl: (baseUrl || OPENAI_COMPATIBLE_DEFAULTS.baseUrl).trim(),
-      name: name?.trim() || `OpenAI Compatible (${apiType === "responses" ? "Responses" : "Chat"})`,
+      name: name.trim(),
     });
 
     return NextResponse.json({ node }, { status: 201 });

@@ -296,10 +296,14 @@ ApiKeyProviderCard.propTypes = {
 function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
   const [formData, setFormData] = useState({
     name: "",
+    prefix: "",
     apiType: "chat",
     baseUrl: "https://api.openai.com/v1",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [checkKey, setCheckKey] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
 
   const apiTypeOptions = [
     { value: "chat", label: "Chat Completions" },
@@ -315,7 +319,7 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
   }, [formData.apiType]);
 
   const handleSubmit = async () => {
-    if (!formData.baseUrl.trim()) return;
+    if (!formData.name.trim() || !formData.prefix.trim() || !formData.baseUrl.trim()) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/provider-nodes", {
@@ -323,6 +327,7 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
+          prefix: formData.prefix,
           apiType: formData.apiType,
           baseUrl: formData.baseUrl,
         }),
@@ -332,14 +337,34 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
         onCreated(data.node);
         setFormData({
           name: "",
+          prefix: "",
           apiType: "chat",
           baseUrl: "https://api.openai.com/v1",
         });
+        setCheckKey("");
+        setValidationResult(null);
       }
     } catch (error) {
       console.log("Error creating OpenAI Compatible node:", error);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleValidate = async () => {
+    setValidating(true);
+    try {
+      const res = await fetch("/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl: formData.baseUrl, apiKey: checkKey }),
+      });
+      const data = await res.json();
+      setValidationResult(data.valid ? "success" : "failed");
+    } catch {
+      setValidationResult("failed");
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -351,7 +376,14 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="OpenAI Compatible (Prod)"
-          hint="Optional. A friendly label for this node."
+          hint="Required. A friendly label for this node."
+        />
+        <Input
+          label="Prefix"
+          value={formData.prefix}
+          onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+          placeholder="oc-prod"
+          hint="Required. Used as the provider prefix for model IDs."
         />
         <Select
           label="API Type"
@@ -367,7 +399,26 @@ function AddOpenAICompatibleModal({ isOpen, onClose, onCreated }) {
           hint="Use the base URL (ending in /v1) for your OpenAI-compatible API."
         />
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={!formData.baseUrl.trim() || submitting}>
+          <Input
+            label="API Key (for Check)"
+            type="password"
+            value={checkKey}
+            onChange={(e) => setCheckKey(e.target.value)}
+            className="flex-1"
+          />
+          <div className="pt-6">
+            <Button onClick={handleValidate} disabled={!checkKey || validating || !formData.baseUrl.trim()} variant="secondary">
+              {validating ? "Checking..." : "Check"}
+            </Button>
+          </div>
+        </div>
+        {validationResult && (
+          <Badge variant={validationResult === "success" ? "success" : "error"}>
+            {validationResult === "success" ? "Valid" : "Invalid"}
+          </Badge>
+        )}
+        <div className="flex gap-2">
+          <Button onClick={handleSubmit} fullWidth disabled={!formData.name.trim() || !formData.prefix.trim() || !formData.baseUrl.trim() || submitting}>
             {submitting ? "Creating..." : "Create"}
           </Button>
           <Button onClick={onClose} variant="ghost" fullWidth>

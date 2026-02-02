@@ -161,6 +161,7 @@ export async function createProviderNode(data) {
     id: data.id || uuidv4(),
     type: data.type,
     name: data.name,
+    prefix: data.prefix,
     apiType: data.apiType,
     baseUrl: data.baseUrl,
     createdAt: now,

@@ -6,11 +6,19 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, apiType, baseUrl } = body;
+    const { name, prefix, apiType, baseUrl } = body;
     const node = await getProviderNodeById(id);
 
     if (!node) {
       return NextResponse.json({ error: "Provider node not found" }, { status: 404 });
+    }
+
+    if (!name?.trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    if (!prefix?.trim()) {
+      return NextResponse.json({ error: "Prefix is required" }, { status: 400 });
     }
 
     if (!apiType || !["chat", "responses"].includes(apiType)) {
@@ -22,7 +30,8 @@ export async function PUT(request, { params }) {
     }
 
     const updated = await updateProviderNode(id, {
-      name: name?.trim() || node.name,
+      name: name.trim(),
+      prefix: prefix.trim(),
       apiType,
       baseUrl: baseUrl.trim(),
     });
@@ -32,6 +41,7 @@ export async function PUT(request, { params }) {
       updateProviderConnection(connection.id, {
         providerSpecificData: {
           ...(connection.providerSpecificData || {}),
+          prefix: prefix.trim(),
           apiType,
           baseUrl: baseUrl.trim(),
           nodeName: updated.name,

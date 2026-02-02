@@ -39,6 +39,10 @@ export default function ProviderDetailPage() {
   const models = getModelsByProviderId(providerId);
   const providerAlias = getProviderAlias(providerId);
   const isOpenAICompatible = isOpenAICompatibleProvider(providerId);
+  const providerStorageAlias = isOpenAICompatible ? providerId : providerAlias;
+  const providerDisplayAlias = isOpenAICompatible
+    ? (providerNode?.prefix || providerId)
+    : providerAlias;
 
   // Define callbacks BEFORE the useEffect that uses them
   const fetchAliases = useCallback(async () => {
@@ -99,8 +103,8 @@ export default function ProviderDetailPage() {
     fetchAliases();
   }, [fetchConnections, fetchAliases]);
 
-  const handleSetAlias = async (modelId, alias) => {
-    const fullModel = `${providerAlias}/${modelId}`;
+  const handleSetAlias = async (modelId, alias, providerAliasOverride = providerAlias) => {
+    const fullModel = `${providerAliasOverride}/${modelId}`;
     try {
       const res = await fetch("/api/models/alias", {
         method: "PUT",
@@ -236,7 +240,8 @@ export default function ProviderDetailPage() {
     if (isOpenAICompatible) {
       return (
         <OpenAICompatibleModelsSection
-          providerAlias={providerAlias}
+          providerStorageAlias={providerStorageAlias}
+          providerDisplayAlias={providerDisplayAlias}
           modelAliases={modelAliases}
           copied={copied}
           onCopy={copy}
@@ -264,7 +269,7 @@ export default function ProviderDetailPage() {
     return (
       <div className="flex flex-wrap gap-3">
         {models.map((model) => {
-          const fullModel = `${providerAlias}/${model.id}`;
+          const fullModel = `${providerStorageAlias}/${model.id}`;
           const oldFormatModel = `${providerId}/${model.id}`;
           const existingAlias = Object.entries(modelAliases).find(
             ([, m]) => m === fullModel || m === oldFormatModel
@@ -273,11 +278,11 @@ export default function ProviderDetailPage() {
             <ModelRow
               key={model.id}
               model={model}
-              fullModel={fullModel}
+              fullModel={`${providerDisplayAlias}/${model.id}`}
               alias={existingAlias}
               copied={copied}
               onCopy={copy}
-              onSetAlias={(alias) => handleSetAlias(model.id, alias)}
+              onSetAlias={(alias) => handleSetAlias(model.id, alias, providerStorageAlias)}
               onDeleteAlias={() => handleDeleteAlias(existingAlias)}
             />
           );
@@ -671,17 +676,17 @@ PassthroughModelRow.propTypes = {
   onDeleteAlias: PropTypes.func.isRequired,
 };
 
-function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, onCopy, onSetAlias, onDeleteAlias, connections }) {
+function OpenAICompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, modelAliases, copied, onCopy, onSetAlias, onDeleteAlias, connections }) {
   const [newModel, setNewModel] = useState("");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const providerAliases = Object.entries(modelAliases).filter(
-    ([, model]) => model.startsWith(`${providerAlias}/`)
+    ([, model]) => model.startsWith(`${providerStorageAlias}/`)
   );
 
   const allModels = providerAliases.map(([alias, fullModel]) => ({
-    modelId: fullModel.replace(`${providerAlias}/`, ""),
+    modelId: fullModel.replace(`${providerStorageAlias}/`, ""),
     fullModel,
     alias,
   }));
@@ -702,7 +707,7 @@ function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, on
 
     setAdding(true);
     try {
-      await onSetAlias(modelId, defaultAlias);
+      await onSetAlias(modelId, defaultAlias, providerStorageAlias);
       setNewModel("");
     } catch (error) {
       console.log("Error adding model:", error);
@@ -730,7 +735,7 @@ function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, on
         if (!modelId) continue;
         const defaultAlias = generateDefaultAlias(modelId);
         if (modelAliases[defaultAlias]) continue;
-        await onSetAlias(modelId, defaultAlias);
+        await onSetAlias(modelId, defaultAlias, providerStorageAlias);
       }
     } catch (error) {
       console.log("Error importing models:", error);
@@ -780,7 +785,7 @@ function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, on
             <PassthroughModelRow
               key={fullModel}
               modelId={modelId}
-              fullModel={fullModel}
+              fullModel={`${providerDisplayAlias}/${modelId}`}
               copied={copied}
               onCopy={onCopy}
               onDeleteAlias={() => onDeleteAlias(alias)}
@@ -793,7 +798,8 @@ function OpenAICompatibleModelsSection({ providerAlias, modelAliases, copied, on
 }
 
 OpenAICompatibleModelsSection.propTypes = {
-  providerAlias: PropTypes.string.isRequired,
+  providerStorageAlias: PropTypes.string.isRequired,
+  providerDisplayAlias: PropTypes.string.isRequired,
   modelAliases: PropTypes.object.isRequired,
   copied: PropTypes.string,
   onCopy: PropTypes.func.isRequired,
@@ -1178,15 +1184,20 @@ EditConnectionModal.propTypes = {
 function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
   const [formData, setFormData] = useState({
     name: "",
+    prefix: "",
     apiType: "chat",
     baseUrl: "https://api.openai.com/v1",
   });
   const [saving, setSaving] = useState(false);
+  const [checkKey, setCheckKey] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
 
   useEffect(() => {
     if (node) {
       setFormData({
         name: node.name || "",
+        prefix: node.prefix || "",
         apiType: node.apiType || "chat",
         baseUrl: node.baseUrl || "https://api.openai.com/v1",
       });
@@ -1199,16 +1210,34 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
   ];
 
   const handleSubmit = async () => {
-    if (!formData.baseUrl.trim()) return;
+    if (!formData.name.trim() || !formData.prefix.trim() || !formData.baseUrl.trim()) return;
     setSaving(true);
     try {
       await onSave({
         name: formData.name,
+        prefix: formData.prefix,
         apiType: formData.apiType,
         baseUrl: formData.baseUrl,
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleValidate = async () => {
+    setValidating(true);
+    try {
+      const res = await fetch("/api/provider-nodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl: formData.baseUrl, apiKey: checkKey }),
+      });
+      const data = await res.json();
+      setValidationResult(data.valid ? "success" : "failed");
+    } catch {
+      setValidationResult("failed");
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -1222,7 +1251,14 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="OpenAI Compatible (Prod)"
-          hint="Optional. A friendly label for this node."
+          hint="Required. A friendly label for this node."
+        />
+        <Input
+          label="Prefix"
+          value={formData.prefix}
+          onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+          placeholder="oc-prod"
+          hint="Required. Used as the provider prefix for model IDs."
         />
         <Select
           label="API Type"
@@ -1238,7 +1274,26 @@ function EditOpenAICompatibleModal({ isOpen, node, onSave, onClose }) {
           hint="Use the base URL (ending in /v1) for your OpenAI-compatible API."
         />
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={!formData.baseUrl.trim() || saving}>
+          <Input
+            label="API Key (for Check)"
+            type="password"
+            value={checkKey}
+            onChange={(e) => setCheckKey(e.target.value)}
+            className="flex-1"
+          />
+          <div className="pt-6">
+            <Button onClick={handleValidate} disabled={!checkKey || validating || !formData.baseUrl.trim()} variant="secondary">
+              {validating ? "Checking..." : "Check"}
+            </Button>
+          </div>
+        </div>
+        {validationResult && (
+          <Badge variant={validationResult === "success" ? "success" : "error"}>
+            {validationResult === "success" ? "Valid" : "Invalid"}
+          </Badge>
+        )}
+        <div className="flex gap-2">
+          <Button onClick={handleSubmit} fullWidth disabled={!formData.name.trim() || !formData.prefix.trim() || !formData.baseUrl.trim() || saving}>
             {saving ? "Saving..." : "Save"}
           </Button>
           <Button onClick={onClose} variant="ghost" fullWidth>
@@ -1255,6 +1310,7 @@ EditOpenAICompatibleModal.propTypes = {
   node: PropTypes.shape({
     id: PropTypes.string,
     name: PropTypes.string,
+    prefix: PropTypes.string,
     apiType: PropTypes.string,
     baseUrl: PropTypes.string,
   }),
