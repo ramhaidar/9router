@@ -1094,6 +1094,8 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
   });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
 
   useEffect(() => {
     if (connection) {
@@ -1103,6 +1105,7 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
         apiKey: "",
       });
       setTestResult(null);
+      setValidationResult(null);
     }
   }, [connection]);
 
@@ -1126,10 +1129,34 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
     }
   };
 
+  const handleValidate = async () => {
+    if (!connection?.provider || !formData.apiKey) return;
+    setValidating(true);
+    setValidationResult(null);
+    try {
+      const res = await fetch("/api/providers/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: connection.provider, apiKey: formData.apiKey }),
+      });
+      const data = await res.json();
+      setValidationResult(data.valid ? "success" : "failed");
+    } catch {
+      setValidationResult("failed");
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const handleSubmit = () => {
     const updates = { name: formData.name, priority: formData.priority };
     if (!isOAuth && formData.apiKey) {
       updates.apiKey = formData.apiKey;
+      if (validationResult === "success") {
+        updates.testStatus = "active";
+        updates.lastError = null;
+        updates.lastErrorAt = null;
+      }
     }
     onSave(updates);
   };
@@ -1161,14 +1188,29 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
           onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value) || 1 })}
         />
         {!isOAuth && (
-          <Input
-            label="API Key"
-            type="password"
-            value={formData.apiKey}
-            onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-            placeholder="Enter new API key"
-            hint="Leave blank to keep the current API key."
-          />
+          <>
+            <div className="flex gap-2">
+              <Input
+                label="API Key"
+                type="password"
+                value={formData.apiKey}
+                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                placeholder="Enter new API key"
+                hint="Leave blank to keep the current API key."
+                className="flex-1"
+              />
+              <div className="pt-6">
+                <Button onClick={handleValidate} disabled={!formData.apiKey || validating} variant="secondary">
+                  {validating ? "Checking..." : "Check"}
+                </Button>
+              </div>
+            </div>
+            {validationResult && (
+              <Badge variant={validationResult === "success" ? "success" : "error"}>
+                {validationResult === "success" ? "Valid" : "Invalid"}
+              </Badge>
+            )}
+          </>
         )}
 
         {/* Test Connection */}
@@ -1183,11 +1225,6 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
               </Badge>
             )}
           </div>
-        )}
-        {isCompatible && (
-          <p className="text-xs text-text-muted">
-            Connection testing is not available for OpenAI Compatible nodes.
-          </p>
         )}
 
         <div className="flex gap-2">

@@ -16,7 +16,7 @@ function extractUsage(chunk) {
   if (!chunk || typeof chunk !== "object") return null;
 
   // Claude format (message_delta event)
-  if (chunk.type === "message_delta" && chunk.usage) {
+  if (chunk.type === "message_delta" && chunk.usage && typeof chunk.usage === 'object') {
     return normalizeUsage({
       prompt_tokens: chunk.usage.input_tokens || 0,
       completion_tokens: chunk.usage.output_tokens || 0,
@@ -25,7 +25,7 @@ function extractUsage(chunk) {
     });
   }
   // OpenAI Responses API format (response.completed or response.done)
-  if ((chunk.type === "response.completed" || chunk.type === "response.done") && chunk.response?.usage) {
+  if ((chunk.type === "response.completed" || chunk.type === "response.done") && chunk.response?.usage && typeof chunk.response.usage === 'object') {
     const usage = chunk.response.usage;
     return normalizeUsage({
       prompt_tokens: usage.input_tokens || usage.prompt_tokens || 0,
@@ -35,7 +35,7 @@ function extractUsage(chunk) {
     });
   }
   // OpenAI format
-  if (chunk.usage?.prompt_tokens !== undefined) {
+  if (chunk.usage && typeof chunk.usage === 'object' && chunk.usage.prompt_tokens !== undefined) {
     return normalizeUsage({
       prompt_tokens: chunk.usage.prompt_tokens,
       completion_tokens: chunk.usage.completion_tokens || 0,
@@ -44,7 +44,7 @@ function extractUsage(chunk) {
     });
   }
   // Gemini format
-  if (chunk.usageMetadata) {
+  if (chunk.usageMetadata && typeof chunk.usageMetadata === 'object') {
     return normalizeUsage({
       prompt_tokens: chunk.usageMetadata.promptTokenCount || 0,
       completion_tokens: chunk.usageMetadata.candidatesTokenCount || 0,
@@ -64,12 +64,12 @@ function normalizeUsage(usage) {
     if (Number.isFinite(numeric)) normalized[key] = numeric;
   };
 
-  assignNumber("prompt_tokens", usage.prompt_tokens);
-  assignNumber("completion_tokens", usage.completion_tokens);
-  assignNumber("cache_read_input_tokens", usage.cache_read_input_tokens);
-  assignNumber("cache_creation_input_tokens", usage.cache_creation_input_tokens);
-  assignNumber("cached_tokens", usage.cached_tokens);
-  assignNumber("reasoning_tokens", usage.reasoning_tokens);
+  assignNumber("prompt_tokens", usage?.prompt_tokens);
+  assignNumber("completion_tokens", usage?.completion_tokens);
+  assignNumber("cache_read_input_tokens", usage?.cache_read_input_tokens);
+  assignNumber("cache_creation_input_tokens", usage?.cache_creation_input_tokens);
+  assignNumber("cached_tokens", usage?.cached_tokens);
+  assignNumber("reasoning_tokens", usage?.reasoning_tokens);
 
   if (Object.keys(normalized).length === 0) return null;
   return normalized;
@@ -87,11 +87,11 @@ export const COLORS = {
 
 // Log usage with cache info (green color)
 function logUsage(provider, usage, model = null, connectionId = null) {
-  if (!usage) return;
+  if (!usage || typeof usage !== 'object') return;
 
   const p = provider?.toUpperCase() || "UNKNOWN";
-  const inTokens = usage.prompt_tokens || 0;
-  const outTokens = usage.completion_tokens || 0;
+  const inTokens = usage?.prompt_tokens || 0;
+  const outTokens = usage?.completion_tokens || 0;
 
   let msg = `[${getTimeString()}] 📊 [USAGE] ${p} | in=${inTokens} | out=${outTokens}`;
   if (connectionId) msg += ` | account=${connectionId.slice(0, 8)}...`;
@@ -297,7 +297,7 @@ export function createSSEStream(options = {}) {
             reqLogger?.appendConvertedChunk?.(output);
             controller.enqueue(sharedEncoder.encode(output));
           }
-          if (usage) {
+if (usage && typeof usage === 'object') {
             logUsage(provider, usage, model, connectionId);
           } else {
             // No usage data available - still mark request as completed
@@ -354,7 +354,7 @@ export function createSSEStream(options = {}) {
         reqLogger?.appendConvertedChunk?.(doneOutput);
         controller.enqueue(sharedEncoder.encode(doneOutput));
 
-        if (state?.usage) {
+if (state?.usage && typeof state.usage === 'object') {
           logUsage(state.provider || targetFormat, state.usage, model, connectionId);
         } else {
           // No usage data available - still mark request as completed
