@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProviderConnectionById, updateProviderConnection } from "@/lib/localDb";
+import { isOpenAICompatibleProvider } from "@/shared/constants/providers";
 
 // POST /api/providers/[id]/test - Test connection
 export async function POST(request, { params }) {
@@ -17,13 +18,16 @@ export async function POST(request, { params }) {
     try {
       if (connection.authType === "apikey") {
         // Test API key
-        switch (connection.provider) {
-          case "openai":
-            const openaiRes = await fetch("https://api.openai.com/v1/models", {
-              headers: { "Authorization": `Bearer ${connection.apiKey}` },
-            });
-            isValid = openaiRes.ok;
-            break;
+        if (isOpenAICompatibleProvider(connection.provider)) {
+          error = "Provider test not supported";
+        } else {
+          switch (connection.provider) {
+            case "openai":
+              const openaiRes = await fetch("https://api.openai.com/v1/models", {
+                headers: { "Authorization": `Bearer ${connection.apiKey}` },
+              });
+              isValid = openaiRes.ok;
+              break;
 
           case "anthropic":
             const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -54,8 +58,9 @@ export async function POST(request, { params }) {
             isValid = openrouterRes.ok;
             break;
 
-          default:
-            error = "Provider test not supported";
+            default:
+              error = "Provider test not supported";
+          }
         }
       } else {
         // OAuth - check if token exists and not expired
@@ -92,4 +97,3 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "Test failed" }, { status: 500 });
   }
 }
-

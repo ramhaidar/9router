@@ -19,7 +19,13 @@ export class BaseExecutor {
     return this.getBaseUrls().length || 1;
   }
 
-  buildUrl(model, stream, urlIndex = 0) {
+  buildUrl(model, stream, urlIndex = 0, credentials = null) {
+    if (this.provider?.startsWith?.("openai-compatible-")) {
+      const fallbackUrl = this.provider.includes("responses")
+        ? "https://api.openai.com/v1/responses"
+        : "https://api.openai.com/v1/chat/completions";
+      return credentials?.providerSpecificData?.baseUrl || fallbackUrl;
+    }
     const baseUrls = this.getBaseUrls();
     return baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;
   }
@@ -73,7 +79,7 @@ export class BaseExecutor {
     let lastStatus = 0;
 
     for (let urlIndex = 0; urlIndex < fallbackCount; urlIndex++) {
-      const url = this.buildUrl(model, stream, urlIndex);
+      const url = this.buildUrl(model, stream, urlIndex, credentials);
       const headers = this.buildHeaders(credentials, stream);
       const transformedBody = this.transformRequest(model, body, stream, credentials);
 

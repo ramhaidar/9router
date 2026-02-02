@@ -2,19 +2,21 @@
 
 import { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, Toggle } from "@/shared/components";
-import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, getProviderAlias } from "@/shared/constants/providers";
+import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider } from "@/shared/constants/providers";
 import { getModelsByProviderId } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 
 export default function ProviderDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const providerId = params.id;
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [providerNode, setProviderNode] = useState(null);
   const [showOAuthModal, setShowOAuthModal] = useState(false);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -22,10 +24,20 @@ export default function ProviderDetailPage() {
   const [modelAliases, setModelAliases] = useState({});
   const { copied, copy } = useCopyToClipboard();
 
-  const providerInfo = OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId];
+  const providerInfo = providerNode
+    ? {
+        id: providerNode.id,
+        name: providerNode.name || "OpenAI Compatible",
+        color: "#10A37F",
+        textIcon: "OC",
+        apiType: providerNode.apiType,
+        baseUrl: providerNode.baseUrl,
+      }
+    : (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId]);
   const isOAuth = !!OAUTH_PROVIDERS[providerId];
   const models = getModelsByProviderId(providerId);
   const providerAlias = getProviderAlias(providerId);
+  const isOpenAICompatible = isOpenAICompatibleProvider(providerId);
 
   // Define callbacks BEFORE the useEffect that uses them
   const fetchAliases = useCallback(async () => {
@@ -42,11 +54,19 @@ export default function ProviderDetailPage() {
 
   const fetchConnections = useCallback(async () => {
     try {
-      const res = await fetch("/api/providers");
-      const data = await res.json();
-      if (res.ok) {
-        const filtered = (data.connections || []).filter(c => c.provider === providerId);
+      const [connectionsRes, nodesRes] = await Promise.all([
+        fetch("/api/providers"),
+        fetch("/api/provider-nodes"),
+      ]);
+      const connectionsData = await connectionsRes.json();
+      const nodesData = await nodesRes.json();
+      if (connectionsRes.ok) {
+        const filtered = (connectionsData.connections || []).filter(c => c.provider === providerId);
         setConnections(filtered);
+      }
+      if (nodesRes.ok) {
+        const node = (nodesData.nodes || []).find((entry) => entry.id === providerId) || null;
+        setProviderNode(node);
       }
     } catch (error) {
       console.log("Error fetching connections:", error);
@@ -234,6 +254,15 @@ export default function ProviderDetailPage() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-8">
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    );
+  }
+
   if (!providerInfo) {
     return (
       <div className="text-center py-20">
@@ -241,15 +270,6 @@ export default function ProviderDetailPage() {
         <Link href="/dashboard/providers" className="text-primary mt-4 inline-block">
           Back to Providers
         </Link>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex flex-col gap-8">
-        <CardSkeleton />
-        <CardSkeleton />
       </div>
     );
   }
@@ -270,15 +290,21 @@ export default function ProviderDetailPage() {
             className="rounded-lg flex items-center justify-center"
             style={{ backgroundColor: `${providerInfo.color}15` }}
           >
-            <Image
-              src={`/providers/${providerInfo.id}.png`}
-              alt={providerInfo.name}
-              width={48}
-              height={48}
-              className="object-contain rounded-lg max-w-[48px] max-h-[48px]"
-              sizes="48px"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-            />
+            {providerInfo.textIcon ? (
+              <span className="text-sm font-bold" style={{ color: providerInfo.color }}>
+                {providerInfo.textIcon}
+              </span>
+            ) : (
+              <Image
+                src={`/providers/${providerInfo.id}.png`}
+                alt={providerInfo.name}
+                width={48}
+                height={48}
+                className="object-contain rounded-lg max-w-[48px] max-h-[48px]"
+                sizes="48px"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            )}
           </div>
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">{providerInfo.name}</h1>
@@ -289,17 +315,65 @@ export default function ProviderDetailPage() {
         </div>
       </div>
 
+      {isOpenAICompatible && providerNode && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold">OpenAI Compatible Details</h2>
+              <p className="text-sm text-text-muted">
+                {providerNode.apiType === "responses" ? "Responses API" : "Chat Completions"} · {providerNode.baseUrl}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="delete"
+                onClick={async () => {
+                  if (!confirm("Delete this OpenAI Compatible node?")) return;
+                  try {
+                    const res = await fetch(`/api/provider-nodes/${providerId}`, { method: "DELETE" });
+                    if (res.ok) {
+                      router.push("/dashboard/providers");
+                    }
+                  } catch (error) {
+                    console.log("Error deleting provider node:", error);
+                  }
+                }}
+              >
+                Delete
+              </Button>
+              <Button
+                size="sm"
+                icon="add"
+                onClick={() => setShowAddApiKeyModal(true)}
+                disabled={connections.length > 0}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+          {connections.length > 0 && (
+            <p className="text-sm text-text-muted">
+              Only one connection is allowed per OpenAI Compatible node. Add another node if you need more connections.
+            </p>
+          )}
+        </Card>
+      )}
+
       {/* Connections */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Connections</h2>
-          <Button
-            size="sm"
-            icon="add"
-            onClick={() => isOAuth ? setShowOAuthModal(true) : setShowAddApiKeyModal(true)}
-          >
-            Add
-          </Button>
+          {!isOpenAICompatible && (
+            <Button
+              size="sm"
+              icon="add"
+              onClick={() => isOAuth ? setShowOAuthModal(true) : setShowAddApiKeyModal(true)}
+            >
+              Add
+            </Button>
+          )}
         </div>
 
         {connections.length === 0 ? (
@@ -309,9 +383,11 @@ export default function ProviderDetailPage() {
             </div>
             <p className="text-text-main font-medium mb-1">No connections yet</p>
             <p className="text-sm text-text-muted mb-4">Add your first connection to get started</p>
-            <Button icon="add" onClick={() => isOAuth ? setShowOAuthModal(true) : setShowAddApiKeyModal(true)}>
-              Add Connection
-            </Button>
+            {!isOpenAICompatible && (
+              <Button icon="add" onClick={() => isOAuth ? setShowOAuthModal(true) : setShowAddApiKeyModal(true)}>
+                Add Connection
+              </Button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col divide-y divide-black/[0.03] dark:divide-white/[0.03]">
@@ -367,6 +443,8 @@ export default function ProviderDetailPage() {
       <AddApiKeyModal
         isOpen={showAddApiKeyModal}
         provider={providerId}
+        providerName={providerInfo.name}
+        isOpenAICompatible={isOpenAICompatible}
         onSave={handleSaveApiKey}
         onClose={() => setShowAddApiKeyModal(false)}
       />
@@ -706,7 +784,7 @@ ConnectionRow.propTypes = {
   onDelete: PropTypes.func.isRequired,
 };
 
-function AddApiKeyModal({ isOpen, provider, onSave, onClose }) {
+function AddApiKeyModal({ isOpen, provider, providerName, isOpenAICompatible, onSave, onClose }) {
   const [formData, setFormData] = useState({
     name: "",
     apiKey: "",
@@ -716,6 +794,7 @@ function AddApiKeyModal({ isOpen, provider, onSave, onClose }) {
   const [validationResult, setValidationResult] = useState(null);
 
   const handleValidate = async () => {
+    if (isOpenAICompatible) return;
     setValidating(true);
     try {
       const res = await fetch("/api/providers/validate", {
@@ -744,7 +823,7 @@ function AddApiKeyModal({ isOpen, provider, onSave, onClose }) {
   if (!provider) return null;
 
   return (
-    <Modal isOpen={isOpen} title={`Add ${provider} API Key`} onClose={onClose}>
+    <Modal isOpen={isOpen} title={`Add ${providerName || provider} API Key`} onClose={onClose}>
       <div className="flex flex-col gap-4">
         <Input
           label="Name"
@@ -760,16 +839,23 @@ function AddApiKeyModal({ isOpen, provider, onSave, onClose }) {
             onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
             className="flex-1"
           />
-          <div className="pt-6">
-            <Button onClick={handleValidate} disabled={!formData.apiKey || validating} variant="secondary">
-              {validating ? "Checking..." : "Check"}
-            </Button>
-          </div>
+          {!isOpenAICompatible && (
+            <div className="pt-6">
+              <Button onClick={handleValidate} disabled={!formData.apiKey || validating} variant="secondary">
+                {validating ? "Checking..." : "Check"}
+              </Button>
+            </div>
+          )}
         </div>
         {validationResult && (
           <Badge variant={validationResult === "success" ? "success" : "error"}>
             {validationResult === "success" ? "Valid" : "Invalid"}
           </Badge>
+        )}
+        {isOpenAICompatible && (
+          <p className="text-xs text-text-muted">
+            API key validation is not available for OpenAI Compatible nodes.
+          </p>
         )}
         <Input
           label="Priority"
@@ -793,6 +879,8 @@ function AddApiKeyModal({ isOpen, provider, onSave, onClose }) {
 AddApiKeyModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   provider: PropTypes.string,
+  providerName: PropTypes.string,
+  isOpenAICompatible: PropTypes.bool,
   onSave: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
 };
@@ -843,6 +931,7 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
   if (!connection) return null;
 
   const isOAuth = connection.authType === "oauth";
+  const isCompatible = isOpenAICompatibleProvider(connection.provider);
 
   return (
     <Modal isOpen={isOpen} title="Edit Connection" onClose={onClose}>
@@ -867,16 +956,23 @@ function EditConnectionModal({ isOpen, connection, onSave, onClose }) {
         />
 
         {/* Test Connection */}
-        <div className="flex items-center gap-3">
-          <Button onClick={handleTest} variant="secondary" disabled={testing}>
-            {testing ? "Testing..." : "Test Connection"}
-          </Button>
-          {testResult && (
-            <Badge variant={testResult === "success" ? "success" : "error"}>
-              {testResult === "success" ? "Valid" : "Failed"}
-            </Badge>
-          )}
-        </div>
+        {!isCompatible && (
+          <div className="flex items-center gap-3">
+            <Button onClick={handleTest} variant="secondary" disabled={testing}>
+              {testing ? "Testing..." : "Test Connection"}
+            </Button>
+            {testResult && (
+              <Badge variant={testResult === "success" ? "success" : "error"}>
+                {testResult === "success" ? "Valid" : "Failed"}
+              </Badge>
+            )}
+          </div>
+        )}
+        {isCompatible && (
+          <p className="text-xs text-text-muted">
+            Connection testing is not available for OpenAI Compatible nodes.
+          </p>
+        )}
 
         <div className="flex gap-2">
           <Button onClick={handleSubmit} fullWidth>Save</Button>

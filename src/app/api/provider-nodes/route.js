@@ -1,0 +1,44 @@
+import { NextResponse } from "next/server";
+import { createProviderNode, getProviderNodes } from "@/models";
+import { OPENAI_COMPATIBLE_PREFIX } from "@/shared/constants/providers";
+
+const OPENAI_COMPATIBLE_DEFAULTS = {
+  chat: "https://api.openai.com/v1/chat/completions",
+  responses: "https://api.openai.com/v1/responses",
+};
+
+// GET /api/provider-nodes - List all provider nodes
+export async function GET() {
+  try {
+    const nodes = await getProviderNodes();
+    return NextResponse.json({ nodes });
+  } catch (error) {
+    console.log("Error fetching provider nodes:", error);
+    return NextResponse.json({ error: "Failed to fetch provider nodes" }, { status: 500 });
+  }
+}
+
+// POST /api/provider-nodes - Create provider node
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const { name, apiType, baseUrl } = body;
+
+    if (!apiType || !["chat", "responses"].includes(apiType)) {
+      return NextResponse.json({ error: "Invalid OpenAI compatible API type" }, { status: 400 });
+    }
+
+    const node = await createProviderNode({
+      id: `${OPENAI_COMPATIBLE_PREFIX}${apiType}-${crypto.randomUUID()}`,
+      type: "openai-compatible",
+      apiType,
+      baseUrl: (baseUrl || OPENAI_COMPATIBLE_DEFAULTS[apiType]).trim(),
+      name: name?.trim() || `OpenAI Compatible (${apiType === "responses" ? "Responses" : "Chat"})`,
+    });
+
+    return NextResponse.json({ node }, { status: 201 });
+  } catch (error) {
+    console.log("Error creating provider node:", error);
+    return NextResponse.json({ error: "Failed to create provider node" }, { status: 500 });
+  }
+}
