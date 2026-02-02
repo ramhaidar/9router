@@ -696,18 +696,26 @@ function OpenAICompatibleModelsSection({ providerStorageAlias, providerDisplayAl
     return parts[parts.length - 1];
   };
 
+  const resolveAlias = (modelId) => {
+    const baseAlias = generateDefaultAlias(modelId);
+    if (!modelAliases[baseAlias]) return baseAlias;
+    const prefixedAlias = `${providerDisplayAlias}-${baseAlias}`;
+    if (!modelAliases[prefixedAlias]) return prefixedAlias;
+    return null;
+  };
+
   const handleAdd = async () => {
     if (!newModel.trim() || adding) return;
     const modelId = newModel.trim();
-    const defaultAlias = generateDefaultAlias(modelId);
-    if (modelAliases[defaultAlias]) {
-      alert(`Alias "${defaultAlias}" already exists. Please use a different model or edit existing alias.`);
+    const resolvedAlias = resolveAlias(modelId);
+    if (!resolvedAlias) {
+      alert("All suggested aliases already exist. Please choose a different model or remove conflicting aliases.");
       return;
     }
 
     setAdding(true);
     try {
-      await onSetAlias(modelId, defaultAlias, providerStorageAlias);
+      await onSetAlias(modelId, resolvedAlias, providerStorageAlias);
       setNewModel("");
     } catch (error) {
       console.log("Error adding model:", error);
@@ -738,9 +746,9 @@ function OpenAICompatibleModelsSection({ providerStorageAlias, providerDisplayAl
       for (const model of models) {
         const modelId = model.id || model.name || model.model;
         if (!modelId) continue;
-        const defaultAlias = generateDefaultAlias(modelId);
-        if (modelAliases[defaultAlias]) continue;
-        await onSetAlias(modelId, defaultAlias, providerStorageAlias);
+        const resolvedAlias = resolveAlias(modelId);
+        if (!resolvedAlias) continue;
+        await onSetAlias(modelId, resolvedAlias, providerStorageAlias);
         importedCount += 1;
       }
       if (importedCount === 0) {
