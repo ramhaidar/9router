@@ -753,14 +753,6 @@ function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, m
 
     setImporting(true);
     try {
-      // For Anthropic, we can't easily import models as there's no standardized list endpoint on many proxies
-      // But if the proxy supports /models (OpenAI style), it might work.
-      // Anthropic API itself doesn't have a /models list endpoint.
-      if (isAnthropic) {
-        alert("Importing models is not supported for Anthropic Compatible providers yet (no standard /models endpoint). Please add models manually.");
-        return;
-      }
-
       const res = await fetch(`/api/providers/${activeConnection.id}/models`);
       const data = await res.json();
       if (!res.ok) {
@@ -791,12 +783,12 @@ function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, m
     }
   };
 
-  const canImport = !isAnthropic && connections.some((conn) => conn.isActive !== false);
+  const canImport = connections.some((conn) => conn.isActive !== false);
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-muted">
-        Add {isAnthropic ? "Anthropic" : "OpenAI"}-compatible models manually{isAnthropic ? "." : " or import them from the /models endpoint."}
+        Add {isAnthropic ? "Anthropic" : "OpenAI"}-compatible models manually or import them from the /models endpoint.
       </p>
 
       <div className="flex items-end gap-2 flex-wrap">
@@ -820,7 +812,7 @@ function CompatibleModelsSection({ providerStorageAlias, providerDisplayAlias, m
         </Button>
       </div>
 
-      {!canImport && !isAnthropic && (
+      {!canImport && (
         <p className="text-xs text-text-muted">
           Add a connection to enable importing models.
         </p>
