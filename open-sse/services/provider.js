@@ -199,6 +199,8 @@ export function buildProviderHeaders(provider, credentials, stream = true, body 
   if (isAnthropicCompatible(provider)) {
     if (credentials.apiKey) {
       headers["x-api-key"] = credentials.apiKey;
+      // Do NOT send Authorization header when apiKey is present for Anthropic Compatible
+      // as it causes issues with some providers (e.g. opencode.ai)
     } else if (credentials.accessToken) {
       headers["Authorization"] = `Bearer ${credentials.accessToken}`;
     }
