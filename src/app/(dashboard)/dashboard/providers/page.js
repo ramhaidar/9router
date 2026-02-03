@@ -159,7 +159,13 @@ export default function ProvidersPage() {
             <Button size="sm" icon="add" onClick={() => setShowAddAnthropicCompatibleModal(true)}>
               Add Anthropic Compatible
             </Button>
-            <Button size="sm" variant="secondary" icon="add" onClick={() => setShowAddCompatibleModal(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="add"
+              onClick={() => setShowAddCompatibleModal(true)}
+              className="!bg-white !text-black hover:!bg-gray-100"
+            >
               Add OpenAI Compatible
             </Button>
           </div>

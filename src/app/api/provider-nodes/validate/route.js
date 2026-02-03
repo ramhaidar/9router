@@ -31,7 +31,8 @@ export async function POST(request) {
         headers: {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
+          "content-type": "application/json",
+          "Authorization": `Bearer ${apiKey}` // Add Bearer token for hybrid proxies
         },
         body: JSON.stringify({
           model: "claude-3-opus-20240229", // Dummy model, doesn't matter much for auth check usually
