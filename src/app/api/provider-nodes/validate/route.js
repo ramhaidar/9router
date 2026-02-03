@@ -18,38 +18,19 @@ export async function POST(request) {
         normalizedBase = normalizedBase.slice(0, -9); // remove /messages
       }
 
-      const messagesUrl = `${normalizedBase}/messages`;
+      // Use /models endpoint for validation as many compatible providers support it (like OpenAI)
+      const modelsUrl = `${normalizedBase}/models`;
 
-      // We can't easily validate without a model, but we can check if the endpoint is reachable
-      // Or we can try a dry-run if supported, or just a minimal call.
-      // Since we don't know the model, we can't make a real request.
-      // However, Anthropic API returns 400 if model is missing, but 401 if key is invalid.
-      // This is a good way to check the key.
-
-      const res = await fetch(messagesUrl, {
-        method: "POST",
+      const res = await fetch(modelsUrl, {
+        method: "GET",
         headers: {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
           "Authorization": `Bearer ${apiKey}` // Add Bearer token for hybrid proxies
-        },
-        body: JSON.stringify({
-          model: "claude-3-opus-20240229", // Dummy model, doesn't matter much for auth check usually
-          messages: [{ role: "user", content: "Hi" }],
-          max_tokens: 1
-        })
+        }
       });
 
-      // If we get 401/403, key is invalid.
-      // If we get 200, key is valid.
-      // If we get 400 (Bad Request), it usually means the request was malformed (e.g., invalid model)
-      // but authentication succeeded. This is a common pattern for validation.
-      // If we get 404, the endpoint path is wrong (likely), but could also be a weird proxy.
-      // We will assume 401/403 are the only definitive "invalid key" signals.
-
-      const isValid = res.status !== 401 && res.status !== 403;
-      return NextResponse.json({ valid: isValid, error: isValid ? null : "Invalid API key" });
+      return NextResponse.json({ valid: res.ok, error: res.ok ? null : "Invalid API key" });
     }
 
     // OpenAI Compatible Validation (Default)
