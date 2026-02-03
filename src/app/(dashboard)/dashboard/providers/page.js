@@ -156,10 +156,10 @@ export default function ProvidersPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">API Key Providers</h2>
           <div className="flex gap-2">
-            <Button size="sm" variant="secondary" icon="add" onClick={() => setShowAddAnthropicCompatibleModal(true)}>
+            <Button size="sm" icon="add" onClick={() => setShowAddAnthropicCompatibleModal(true)}>
               Add Anthropic Compatible
             </Button>
-            <Button size="sm" icon="add" onClick={() => setShowAddCompatibleModal(true)}>
+            <Button size="sm" variant="secondary" icon="add" onClick={() => setShowAddCompatibleModal(true)}>
               Add OpenAI Compatible
             </Button>
           </div>

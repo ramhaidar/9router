@@ -55,11 +55,18 @@ export async function POST(request) {
     }
 
     if (nodeType === "anthropic-compatible") {
+      // Sanitize Base URL: remove trailing slash, and remove trailing /messages if user added it
+      // This prevents double-appending /messages at runtime
+      let sanitizedBaseUrl = (baseUrl || ANTHROPIC_COMPATIBLE_DEFAULTS.baseUrl).trim().replace(/\/$/, "");
+      if (sanitizedBaseUrl.endsWith("/messages")) {
+        sanitizedBaseUrl = sanitizedBaseUrl.slice(0, -9); // remove /messages
+      }
+
       const node = await createProviderNode({
         id: `${ANTHROPIC_COMPATIBLE_PREFIX}${crypto.randomUUID()}`,
         type: "anthropic-compatible",
         prefix: prefix.trim(),
-        baseUrl: (baseUrl || ANTHROPIC_COMPATIBLE_DEFAULTS.baseUrl).trim(),
+        baseUrl: sanitizedBaseUrl,
         name: name.trim(),
       });
       return NextResponse.json({ node }, { status: 201 });

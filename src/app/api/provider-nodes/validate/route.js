@@ -12,8 +12,13 @@ export async function POST(request) {
 
     // Anthropic Compatible Validation
     if (type === "anthropic-compatible") {
-      // Validate using /v1/messages with dummy request
-      const messagesUrl = `${baseUrl.replace(/\/$/, "")}/messages`;
+      // Robustly construct URL: remove trailing slash, and remove trailing /messages if user added it
+      let normalizedBase = baseUrl.trim().replace(/\/$/, "");
+      if (normalizedBase.endsWith("/messages")) {
+        normalizedBase = normalizedBase.slice(0, -9); // remove /messages
+      }
+
+      const messagesUrl = `${normalizedBase}/messages`;
 
       // We can't easily validate without a model, but we can check if the endpoint is reachable
       // Or we can try a dry-run if supported, or just a minimal call.
@@ -37,9 +42,10 @@ export async function POST(request) {
 
       // If we get 401/403, key is invalid.
       // If we get 200, key is valid.
-      // If we get 400/404, the endpoint might be there but model invalid, which implies auth passed (usually).
-      // But some proxies might behave differently.
-      // Safer bet: 401/403 is definitely invalid. Everything else implies connectivity to an endpoint.
+      // If we get 400 (Bad Request), it usually means the request was malformed (e.g., invalid model)
+      // but authentication succeeded. This is a common pattern for validation.
+      // If we get 404, the endpoint path is wrong (likely), but could also be a weird proxy.
+      // We will assume 401/403 are the only definitive "invalid key" signals.
 
       const isValid = res.status !== 401 && res.status !== 403;
       return NextResponse.json({ valid: isValid, error: isValid ? null : "Invalid API key" });
